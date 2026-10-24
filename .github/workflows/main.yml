@@ -1,0 +1,25 @@
+
+name: Build Math App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Build HTML package
+        run: |
+          mkdir -p output
+          zip -r output/Math-App.zip . -x ".git/*" ".github/*" "output/*"
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Math-App
+          path: output/Math-App.zip
+          
