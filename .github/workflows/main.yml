@@ -1,13 +1,11 @@
 
 name: Build Math App
 
-
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-      
 
 jobs:
   build:
@@ -17,10 +15,17 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Prepare Math App
+      - name: Setup ZIP tools
+        run: sudo apt-get update && sudo apt-get install -y unzip zip
+
+      - name: Extract Math App
         run: |
-          mkdir -p output
-          cp sulaiman_math_project_ready.zip output/Math-App.zip
+          mkdir -p extracted output
+          unzip -o sulaiman_math_enhanced.zip -d extracted
+
+      - name: Prepare app package
+        run: |
+          zip -r output/Math-App.zip extracted
 
       - name: Upload Math App
         uses: actions/upload-artifact@v4
