@@ -15,7 +15,7 @@ jobs:
       - name: Build HTML package
         run: |
           mkdir -p output
-          zip -r output/Math-App.zip . \
+          zip -r output/sulaiman_math_project_ready.zip. \
             -x ".git/*" \
             -x ".github/*" \
             -x "output/*"
