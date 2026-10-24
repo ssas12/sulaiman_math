@@ -7,12 +7,15 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download project
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -28,6 +31,14 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Create Android project
         run: |
@@ -76,33 +87,39 @@ jobs:
                   applicationId 'com.sulaiman.math'
                   minSdk 23
                   targetSdk 28
-                  versionCode 2
-                  versionName '2.0'
-              }
+                  versionCode 3
+                  versionName '3.0'
+          }
           }
           EOF
 
       - name: Extract HTML project
         run: |
           ZIP=$(find . -maxdepth 2 \
-            -name 'sulaiman_math_enhanced_v2.zip' \
+            -type f -iname '*.zip' \
+            ! -path './.git/*' \
             -print -quit)
 
           if [ -z "$ZIP" ]; then
-            echo "Project ZIP not found"
+            echo "ERROR: Project ZIP not found"
             exit 1
           fi
 
+          echo "Using project: $ZIP"
+
+          mkdir -p extracted
           unzip -o "$ZIP" -d extracted
 
           HTML=$(find extracted \
-            -name 'sulaiman_math_enhanced.html' \
+            -type f -iname '*.html' \
             -print -quit)
 
           if [ -z "$HTML" ]; then
-            echo "HTML file not found"
+            echo "ERROR: HTML file not found"
             exit 1
           fi
+
+          echo "Using HTML: $HTML"
 
           cp "$HTML" app/src/main/assets/index.html
 
@@ -119,21 +136,19 @@ jobs:
 
           public class MainActivity extends Activity {
 
+              private WebView web;
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  WebView web = new WebView(this);
+                  web = new WebView(this);
 
-                  WebSettings settings =
-                      web.getSettings();
-
+                  WebSettings settings = web.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
 
-                  web.setWebViewClient(
-                      new WebViewClient()
-                  );
+                  web.setWebViewClient(new WebViewClient());
 
                   setContentView(web);
 
@@ -144,8 +159,11 @@ jobs:
 
               @Override
               public void onBackPressed() {
-                  setContentView(new WebView(this));
-                  super.onBackPressed();
+                  if (web != null && web.canGoBack()) {
+                      web.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
               }
           }
           EOF
@@ -177,10 +195,22 @@ jobs:
 
       - name: Build APK
         run: |
-          gradle assembleDebug
+          gradle --no-daemon assembleDebug
+
+      - name: Verify APK
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated"
+            exit 1
+          fi
+
+          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Sulaiman-Math-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
