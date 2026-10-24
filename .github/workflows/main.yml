@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout project
+      - name: Download project
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -21,122 +21,93 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-  
-
-      
-      - name: Setup Android SDK
-        run: |
-          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "/usr/local/lib/android/sdk/platform-tools" >> $GITHUB_PATH
-
-      - name: Accept Android licenses
-        run: |
-          yes | sdkmanager --licenses || true
-
-      - name: Install Android packages
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-
-      - name: Install Android packages
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-
-
-      - name: Install Android SDK
-        run: |
-          sdkmanager "platforms;android-35" \
-            "build-tools;35.0.0"
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.9'
 
-      - name: Extract website
-        run: |
-          mkdir -p website
-          unzip -o sulaiman_math_enhanced.zip -d website
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Create Android project
         run: |
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/sulaiman/math
 
-          cp -r website/sulaiman_math_app_upload/. \
-            app/src/main/assets/
-
           cat > settings.gradle <<'EOF'
           pluginManagement {
-            repositories {
-              google()
-              mavenCentral()
-              gradlePluginPortal()
-            }
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
           }
+
           dependencyResolutionManagement {
-            repositoriesMode.set(
-              RepositoriesMode.FAIL_ON_PROJECT_REPOS
-            )
-            repositories {
-              google()
-              mavenCentral()
-            }
+              repositoriesMode.set(
+                  RepositoriesMode.FAIL_ON_PROJECT_REPOS
+              )
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           }
+
           rootProject.name = "SulaimanMath"
           include ':app'
           EOF
 
           cat > build.gradle <<'EOF'
           plugins {
-            id 'com.android.application' version '8.6.1' apply false
+              id 'com.android.application' version '8.7.3' apply false
           }
           EOF
 
           cat > app/build.gradle <<'EOF'
           plugins {
-            id 'com.android.application'
+              id 'com.android.application'
           }
 
           android {
-            namespace 'com.sulaiman.math'
-            compileSdk 35
+              namespace 'com.sulaiman.math'
+              compileSdk 35
 
-            defaultConfig {
-              applicationId 'com.sulaiman.math'
-              minSdk 23
-              targetSdk 28
-              versionCode 1
-              versionName '1.0'
-            }
+              defaultConfig {
+                  applicationId 'com.sulaiman.math'
+                  minSdk 23
+                  targetSdk 28
+                  versionCode 2
+                  versionName '2.0'
+              }
           }
           EOF
 
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application
-              android:theme="@android:style/Theme.Material.Light.NoActionBar"
-              android:label="الأستاذ سليمان - الرياضيات"
-              android:usesCleartextTraffic="true">
+      - name: Extract HTML project
+        run: |
+          ZIP=$(find . -maxdepth 2 \
+            -name 'sulaiman_math_enhanced_v2.zip' \
+            -print -quit)
 
-              <activity
-                android:name="com.sulaiman.math.MainActivity"
-                android:exported="true">
+          if [ -z "$ZIP" ]; then
+            echo "Project ZIP not found"
+            exit 1
+          fi
 
-                <intent-filter>
-                  <action android:name="android.intent.action.MAIN"/>
-                  <category android:name="android.intent.category.LAUNCHER"/>
-                </intent-filter>
+          unzip -o "$ZIP" -d extracted
 
-              </activity>
-            </application>
-          </manifest>
-          EOF
+          HTML=$(find extracted \
+            -name 'sulaiman_math_enhanced.html' \
+            -print -quit)
 
+          if [ -z "$HTML" ]; then
+            echo "HTML file not found"
+            exit 1
+          fi
+
+          cp "$HTML" app/src/main/assets/index.html
+
+      - name: Create Android Activity
+        run: |
           cat > app/src/main/java/com/sulaiman/math/MainActivity.java <<'EOF'
           package com.sulaiman.math;
 
@@ -144,34 +115,64 @@ jobs:
           import android.os.Bundle;
           import android.webkit.WebView;
           import android.webkit.WebSettings;
+          import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
-            @Override
-            protected void onCreate(Bundle savedInstanceState) {
-              super.onCreate(savedInstanceState);
 
-              WebView web = new WebView(this);
-              WebSettings settings = web.getSettings();
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
 
-              settings.setJavaScriptEnabled(true);
-              settings.setDomStorageEnabled(true);
+                  WebView web = new WebView(this);
 
-              web.setWebViewClient(
-                new android.webkit.WebViewClient()
-              );
+                  WebSettings settings =
+                      web.getSettings();
 
-              setContentView(web);
-              web.loadUrl(
-                "file:///android_asset/index.html"
-              );
-            }
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
 
-            @Override
-            public void onBackPressed() {
-              setContentView(new WebView(this));
-              finish();
-            }
+                  web.setWebViewClient(
+                      new WebViewClient()
+                  );
+
+                  setContentView(web);
+
+                  web.loadUrl(
+                      "file:///android_asset/index.html"
+                  );
+              }
+
+              @Override
+              public void onBackPressed() {
+                  setContentView(new WebView(this));
+                  super.onBackPressed();
+              }
           }
+          EOF
+
+      - name: Create Android Manifest
+        run: |
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:label="الأستاذ سليمان - الرياضيات"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:usesCleartextTraffic="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+          </manifest>
           EOF
 
       - name: Build APK
