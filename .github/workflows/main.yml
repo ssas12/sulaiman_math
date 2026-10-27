@@ -1,5 +1,5 @@
 
-name: Build Math APK
+name: Build Math APK v6
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    name: Build Sulaiman Math v6
     runs-on: ubuntu-latest
 
     steps:
@@ -29,192 +30,54 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      
-            - name: Setup Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          cmdline-tools-version: 11076708
+          cmdline-tools-version: '11076708'
 
-      
       - name: Install Android packages
         run: |
           yes | sdkmanager --licenses || true
-
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-            
-        run: |
-          yes | sdkmanager --licenses
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Create Android project
+      - name: Check project files
         run: |
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/java/com/sulaiman/math
-
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          dependencyResolutionManagement {
-              repositoriesMode.set(
-                  RepositoriesMode.FAIL_ON_PROJECT_REPOS
-              )
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "SulaimanMath"
-          include ':app'
-          EOF
-
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.7.3' apply false
-          }
-          EOF
-
-          cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.sulaiman.math'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.sulaiman.math'
-                  minSdk 23
-                  targetSdk 28
-                  versionCode 3
-                  versionName '3.0'
-          }
-          }
-          EOF
-
-      - name: Extract HTML project
-        run: |
-          ZIP=$(find . -maxdepth 2 \
-            -type f -iname '*.zip' \
-            ! -path './.git/*' \
-            -print -quit)
-
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: Project ZIP not found"
+          if [ ! -d app ]; then
+            echo "ERROR: app directory is missing"
             exit 1
           fi
 
-          echo "Using project: $ZIP"
-
-          mkdir -p extracted
-          unzip -o "$ZIP" -d extracted
-
-          HTML=$(find extracted \
-            -type f -iname '*.html' \
-            -print -quit)
-
-          if [ -z "$HTML" ]; then
-            echo "ERROR: HTML file not found"
+          if [ ! -f settings.gradle ] && \
+             [ ! -f settings.gradle.kts ]; then
+            echo "ERROR: Gradle settings file is missing"
             exit 1
           fi
 
-          echo "Using HTML: $HTML"
-
-          cp "$HTML" app/src/main/assets/index.html
-
-      - name: Create Android Activity
-        run: |
-          cat > app/src/main/java/com/sulaiman/math/MainActivity.java <<'EOF'
-          package com.sulaiman.math;
-
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebSettings;
-          import android.webkit.WebViewClient;
-
-          public class MainActivity extends Activity {
-
-              private WebView web;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  web = new WebView(this);
-
-                  WebSettings settings = web.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-
-                  web.setWebViewClient(new WebViewClient());
-
-                  setContentView(web);
-
-                  web.loadUrl(
-                      "file:///android_asset/index.html"
-                  );
-              }
-
-              @Override
-              public void onBackPressed() {
-                  if (web != null && web.canGoBack()) {
-                      web.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
-              }
-          }
-          EOF
-
-      - name: Create Android Manifest
-        run: |
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <application
-                  android:label="الأستاذ سليمان - الرياضيات"
-                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
-                  android:usesCleartextTraffic="true">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-
-                  </activity>
-
-              </application>
-          </manifest>
-          EOF
+          if [ ! -f app/build.gradle ] && \
+             [ ! -f app/build.gradle.kts ]; then
+            echo "ERROR: App Gradle file is missing"
+            exit 1
+          fi
 
       - name: Build APK
         run: |
-          gradle --no-daemon assembleDebug
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew --no-daemon assembleDebug
+          else
+            gradle --no-daemon assembleDebug
+          fi
 
       - name: Verify APK
         run: |
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          APK="app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
             echo "ERROR: APK was not generated"
+            find app/build/outputs -type f || true
             exit 1
           fi
 
@@ -223,6 +86,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sulaiman-Math-APK
+          name: Sulaiman-Math-APK-v6
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
