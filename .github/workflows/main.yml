@@ -24,23 +24,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Configure Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
 
       - name: Find and extract project
         shell: bash
         run: |
           set -e
-          echo "Searching for Android project..."
 
           if [ ! -d app ]; then
             ZIP_FILE=$(find . -maxdepth 2 -type f -iname '*.zip' | head -n 1)
 
             if [ -n "$ZIP_FILE" ]; then
-              echo "Extracting $ZIP_FILE"
               mkdir -p extracted
               unzip -o "$ZIP_FILE" -d extracted
 
@@ -54,13 +51,12 @@ jobs:
           fi
 
           if [ ! -d app ]; then
-            echo "ERROR: app directory is missing."
-            echo "Check the ZIP file and project folder structure."
+            echo "ERROR: app directory is missing"
             find . -maxdepth 3 -type d | head -n 80
             exit 1
           fi
 
-          echo "Android app directory found."
+          echo "Android project found"
 
       - name: Build APK
         shell: bash
@@ -70,10 +66,8 @@ jobs:
           if [ -f gradlew ]; then
             chmod +x gradlew
             ./gradlew assembleDebug --no-daemon
-          elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
-            gradle assembleDebug --no-daemon
           else
-            echo "ERROR: Gradle build file not found."
+            echo "ERROR: gradlew is missing"
             exit 1
           fi
 
@@ -82,10 +76,12 @@ jobs:
         run: |
           set -e
           APK=$(find . -type f -path '*/build/outputs/apk/*/*.apk' | head -n 1)
+
           if [ -z "$APK" ]; then
-            echo "ERROR: APK was not generated."
+            echo "ERROR: APK was not generated"
             exit 1
           fi
+
           echo "APK generated: $APK"
 
       - name: Upload APK
