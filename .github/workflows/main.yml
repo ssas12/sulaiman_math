@@ -88,25 +88,47 @@ jobs:
           echo "PROJECT_ZIP=$ZIP" >> "$GITHUB_ENV"
           unzip -Z1 "$ZIP" | head -40
 
+      
       - name: Prepare HTML assets
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p html_project
           unzip -q -o "$PROJECT_ZIP" -d html_project
 
+          echo "Files extracted from project:"
+          find html_project -maxdepth 5 -type f | head -100
+
           INDEX="$(find html_project -type f \
-            -iname index.html -print -quit)"
+            -iname 'index.html' -print -quit)"
+
           if [ -z "$INDEX" ]; then
-            echo "ERROR: index.html was not found in the ZIP."
+            INDEX="$(find html_project -type f \
+              \( -iname '*.html' -o -iname '*.htm' \) \
+              -print -quit)"
+          fi
+
+          if [ -z "$INDEX" ]; then
+            echo "ERROR: No HTML page exists in the ZIP."
+            echo "Check the file list above."
             exit 1
           fi
 
-          mkdir -p app/src/main/assets/site
-          cp -a "$(dirname "$INDEX")"/. \
-            app/src/main/assets/site/
-          test -f app/src/main/assets/site/index.html
+          echo "Selected HTML page: $INDEX"
 
+          mkdir -p app/src/main/assets/site
+          HTML_DIR="$(dirname "$INDEX")"
+
+          cp -a "$HTML_DIR"/. \
+            app/src/main/assets/site/
+
+          cp "$INDEX" \
+            app/src/main/assets/site/index.html
+
+          test -s app/src/main/assets/site/index.html
+          echo "HTML assets prepared successfully."
+          
       - name: Create Android project
         shell: bash
         run: |
