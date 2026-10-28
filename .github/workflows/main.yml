@@ -29,8 +29,44 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking Android SDK..."
+
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+          if [ -z "$ANDROID_HOME" ]; then
+            echo "ERROR: ANDROID_HOME is not set"
+            exit 1
+          fi
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+              -type f -name sdkmanager 2>/dev/null | head -n 1)
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
+
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+            yes | "$SDKMANAGER" --licenses || true
+            "$SDKMANAGER" "platforms;android-35"
+          fi
+
+          if [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
+            "$SDKMANAGER" "build-tools;35.0.0"
+          fi
+
+          echo "Android SDK check completed."
+
 
       - name: Install Android SDK packages
         run: |
