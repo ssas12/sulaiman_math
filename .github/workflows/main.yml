@@ -1,5 +1,5 @@
 
-name: Build Sulaiman Math v6
+name: Build Sulaiman Math V6
 
 'on':
   workflow_dispatch:
@@ -13,89 +13,104 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      JAVA_VERSION: '17'
+      ANDROID_API: '35'
+      BUILD_TOOLS_VERSION: '35.0.0'
 
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      
-      - name: Setup Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools'
-
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          set -e
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-
-            - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools'
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
-
-      - name: Extract HTML project
+      - name: Locate Android SDK
         shell: bash
         run: |
           set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
 
+          S="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$S" ]; then
+            S="$(find "$SDK/cmdline-tools" -type f \
+              -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$S" ] || [ ! -x "$S" ]; then
+            echo "ERROR: sdkmanager was not found in $SDK"
+            find /usr/local/lib/android -name sdkmanager \
+              -type f -print 2>/dev/null || true
+            exit 1
+          fi
+          echo "SDKMANAGER=$S" >> "$GITHUB_ENV"
+          echo "$(dirname "$S")" >> "$GITHUB_PATH"
+          "$S" --version
+
+      - name: Accept Android licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" --licenses || true
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify project ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
           ZIP="$(find . -maxdepth 2 -type f \
             -iname 'sulaiman_math_enhanced_v2.zip' \
             -print -quit)"
-
           if [ -z "$ZIP" ]; then
-            echo "ERROR: Project ZIP not found in repository root."
+            echo "ERROR: sulaiman_math_enhanced_v2.zip is missing."
+            echo "Upload the project ZIP to the repository root."
             exit 1
           fi
+          echo "PROJECT_ZIP=$ZIP" >> "$GITHUB_ENV"
+          unzip -Z1 "$ZIP" | head -40
 
+      - name: Prepare HTML assets
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p html_project
-          unzip -q -o "$ZIP" -d html_project
+          unzip -q -o "$PROJECT_ZIP" -d html_project
 
           INDEX="$(find html_project -type f \
-            -iname 'index.html' -print -quit)"
-
+            -iname index.html -print -quit)"
           if [ -z "$INDEX" ]; then
-            echo "ERROR: No index.html was found in the ZIP."
+            echo "ERROR: index.html was not found in the ZIP."
             exit 1
           fi
 
           mkdir -p app/src/main/assets/site
-
-          INDEX_DIR="$(dirname "$INDEX")"
-          cp -a "$INDEX_DIR"/. app/src/main/assets/site/
-
+          cp -a "$(dirname "$INDEX")"/. \
+            app/src/main/assets/site/
           test -f app/src/main/assets/site/index.html
 
-      - name: Create Android project files
+      - name: Create Android project
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p app/src/main/java/com/sulaiman/math
 
           cat > settings.gradle <<'EOF'
@@ -106,7 +121,6 @@ jobs:
                   gradlePluginPortal()
               }
           }
-
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories {
@@ -114,7 +128,6 @@ jobs:
                   mavenCentral()
               }
           }
-
           rootProject.name = "SulaimanMath"
           include(":app")
           EOF
@@ -129,11 +142,9 @@ jobs:
           plugins {
               id 'com.android.application'
           }
-
           android {
               namespace 'com.sulaiman.math'
               compileSdk 35
-
               defaultConfig {
                   applicationId 'com.sulaiman.math'
                   minSdk 23
@@ -146,21 +157,19 @@ jobs:
 
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-
+              <uses-permission android:name="android.permission.INTERNET"/>
               <application
-                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
                   android:label="الأستاذ سليمان - الرياضيات"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
                   android:usesCleartextTraffic="true"
                   android:allowBackup="false"
                   android:supportsRtl="true">
-
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
                   </activity>
               </application>
@@ -173,23 +182,20 @@ jobs:
           import android.app.Activity;
           import android.os.Bundle;
           import android.webkit.WebView;
-          import android.webkit.WebSettings;
           import android.webkit.WebViewClient;
+          import android.webkit.WebSettings;
 
           public class MainActivity extends Activity {
               private WebView webView;
 
               @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
+              protected void onCreate(Bundle state) {
+                  super.onCreate(state);
                   webView = new WebView(this);
                   WebSettings settings = webView.getSettings();
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
-                  settings.setAllowFileAccess(true);
                   webView.setWebViewClient(new WebViewClient());
-
                   setContentView(webView);
                   webView.loadUrl(
                       "file:///android_asset/site/index.html"
@@ -207,8 +213,19 @@ jobs:
           }
           EOF
 
-      - name: Build APK
-        run: gradle --no-daemon assembleDebug
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --version
+          gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -217,3 +234,4 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+          
