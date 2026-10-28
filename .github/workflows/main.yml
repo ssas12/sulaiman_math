@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           ZIP="$(find . -maxdepth 2 -type f \
-            -iname 'sulaiman_math_enhanced_v11.zip' \
+            -iname 'sulaiman_math_enhanced_v12_with_new_icon.zip' \
             -print -quit)"
           if [ -z "$ZIP" ]; then
             echo "ERROR: sulaiman_math_enhanced_v2.zip is missing."
