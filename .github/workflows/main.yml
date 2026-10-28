@@ -1,5 +1,5 @@
 
-name: Build Math APK v6
+name: Build Sulaiman Math v6
 
 on:
   workflow_dispatch:
@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   build:
-    name: Build Sulaiman Math v6
     runs-on: ubuntu-latest
 
     steps:
@@ -27,69 +26,71 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
 
-    
-        
-      
       - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Find and extract project
+        shell: bash
         run: |
-          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
-          echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+          set -e
+          echo "Searching for Android project..."
 
-      - name: Check Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/platform-tools"
-          ls "$ANDROID_HOME/platforms"
-          ls "$ANDROID_HOME/build-tools"
-
-
-
-      - name: Check project files
-        run: |
           if [ ! -d app ]; then
-            echo "ERROR: app directory is missing"
+            ZIP_FILE=$(find . -maxdepth 2 -type f -iname '*.zip' | head -n 1)
+
+            if [ -n "$ZIP_FILE" ]; then
+              echo "Extracting $ZIP_FILE"
+              mkdir -p extracted
+              unzip -o "$ZIP_FILE" -d extracted
+
+              APP_DIR=$(find extracted -type d -name app | head -n 1)
+
+              if [ -n "$APP_DIR" ]; then
+                PROJECT_DIR=$(dirname "$APP_DIR")
+                cp -a "$PROJECT_DIR"/. .
+              fi
+            fi
+          fi
+
+          if [ ! -d app ]; then
+            echo "ERROR: app directory is missing."
+            echo "Check the ZIP file and project folder structure."
+            find . -maxdepth 3 -type d | head -n 80
             exit 1
           fi
 
-          if [ ! -f settings.gradle ] && \
-             [ ! -f settings.gradle.kts ]; then
-            echo "ERROR: Gradle settings file is missing"
-            exit 1
-          fi
-
-          if [ ! -f app/build.gradle ] && \
-             [ ! -f app/build.gradle.kts ]; then
-            echo "ERROR: App Gradle file is missing"
-            exit 1
-          fi
+          echo "Android app directory found."
 
       - name: Build APK
+        shell: bash
         run: |
+          set -e
+
           if [ -f gradlew ]; then
             chmod +x gradlew
-            ./gradlew --no-daemon assembleDebug
+            ./gradlew assembleDebug --no-daemon
+          elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
+            gradle assembleDebug --no-daemon
           else
-            gradle --no-daemon assembleDebug
+            echo "ERROR: Gradle build file not found."
+            exit 1
           fi
 
       - name: Verify APK
+        shell: bash
         run: |
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not generated"
-            find app/build/outputs -type f || true
+          set -e
+          APK=$(find . -type f -path '*/build/outputs/apk/*/*.apk' | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
             exit 1
           fi
-
-          ls -lh "$APK"
+          echo "APK generated: $APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sulaiman-Math-APK-v6
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Sulaiman-Math-v6-APK
+          path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
