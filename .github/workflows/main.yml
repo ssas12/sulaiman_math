@@ -1,229 +1,63 @@
-
 name: Build Sulaiman Math v6
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+workflow_dispatch:
+push:
+branches:
+- main
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout project
+    uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+  - name: Setup Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+  - name: Setup Gradle
+    uses: gradle/actions/setup-gradle@v4
 
-      
-      - name: Prepare Android SDK
-        shell: bash
-        run: |
-          set -e
+  - name: Setup Android SDK
+    uses: android-actions/setup-android@v3
 
-          echo "Checking Android SDK..."
+  - name: Accept Android SDK licenses
+    run: yes | sdkmanager --licenses || true
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
+  - name: Install Android SDK packages
+    run: |
+      sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-          if [ -z "$ANDROID_HOME" ]; then
-            echo "ERROR: ANDROID_HOME is not set"
-            exit 1
-          fi
+  - name: Extract HTML project
+    run: |
+      set -e
+      ZIP="$(find . -maxdepth 2 -type f -name 'sulaiman_math_enhanced_v2.zip' | head -n 1)"
+      if [ -z "$ZIP" ]; then
+        echo "ERROR: Project ZIP not found"
+        exit 1
+      fi
+      mkdir -p html_project
+      unzip -o "$ZIP" -d html_project
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+  - name: Create Android project
+    run: |
+      echo "ضع هنا خطوات إنشاء مشروع Android الموجودة في كودك السابق"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f -name sdkmanager 2>/dev/null | head -n 1)
-          fi
+  - name: Build APK
+    run: |
+      echo "ضع هنا أمر بناء APK الموجود في كودك السابق"
 
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
-            exit 1
-          fi
-
-          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
-            yes | "$SDKMANAGER" --licenses || true
-            "$SDKMANAGER" "platforms;android-35"
-          fi
-
-          if [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
-            "$SDKMANAGER" "build-tools;35.0.0"
-          fi
-
-          echo "Android SDK check completed."
-
-
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Extract HTML project
-        shell: bash
-        run: |
-          set -e
-          mkdir -p source
-
-          ZIP_FILE=$(find . -maxdepth 2 -type f \
-            -name 'sulaiman_math_enhanced_v6.zip' | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            ZIP_FILE=$(find . -maxdepth 2 -type f \
-              -iname '*.zip' -not -path './.git/*' | head -n 1)
-          fi
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: V6 ZIP file not found"
-            exit 1
-          fi
-
-          unzip -o "$ZIP_FILE" -d source
-
-          HTML_FILE=$(find source -type f \
-            -name 'sulaiman_math_enhanced.html' | head -n 1)
-
-          if [ -z "$HTML_FILE" ]; then
-            HTML_FILE=$(find source -type f -iname '*.html' | head -n 1)
-          fi
-
-          if [ -z "$HTML_FILE" ]; then
-            echo "ERROR: No HTML file found in ZIP"
-            exit 1
-          fi
-
-          echo "HTML_FILE=$HTML_FILE" >> "$GITHUB_ENV"
-          echo "Using HTML file: $HTML_FILE"
-
-      - name: Create Android project
-        shell: bash
-        run: |
-          set -e
-
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/java/com/sulaiman/math
-
-          cp "$HTML_FILE" app/src/main/assets/index.html
-
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "SulaimanMathV6"
-          include ':app'
-          EOF
-
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.6.1' apply false
-          }
-          EOF
-
-          cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.sulaiman.math'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.sulaiman.math'
-                  minSdk 23
-                  targetSdk 28
-                  versionCode 6
-                  versionName '6.0'
-              }
-          }
-          EOF
-
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
-                  android:label="الأستاذ سليمان - الرياضيات"
-                  android:usesCleartextTraffic="true"
-                  android:hardwareAccelerated="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          cat > app/src/main/java/com/sulaiman/math/MainActivity.java <<'EOF'
-          package com.sulaiman.math;
-
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebSettings;
-          import android.webkit.WebViewClient;
-
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  WebView webView = new WebView(this);
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setAllowFileAccess(true);
-
-                  webView.setWebViewClient(new WebViewClient());
-                  setContentView(webView);
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-
-              @Override
-              public void onBackPressed() {
-                  WebView webView = (WebView) findViewById(
-                      android.R.id.content
-                  ).getRootView();
-                  super.onBackPressed();
-              }
-          }
-          EOF
-
-      - name: Build APK
-        run: gradle --no-daemon assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Sulaiman-Math-v6-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: Sulaiman-Math-v6-APK
+      path: app/build/outputs/apk/**/*.apk
+      if-no-files-found: error
