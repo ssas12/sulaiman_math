@@ -31,34 +31,50 @@ jobs:
           packages: 'platform-tools'
 
 
+      
       - name: Find and extract project
         shell: bash
         run: |
           set -e
 
+          echo "Checking repository files..."
+          ls -la
+
           if [ ! -d app ]; then
-            ZIP_FILE=$(find . -maxdepth 2 -type f -iname '*.zip' | head -n 1)
+            ZIP_FILE=$(find . -maxdepth 3 -type f -iname '*.zip' \
+              -not -path './.git/*' | head -n 1)
 
-            if [ -n "$ZIP_FILE" ]; then
-              mkdir -p extracted
-              unzip -o "$ZIP_FILE" -d extracted
-
-              APP_DIR=$(find extracted -type d -name app | head -n 1)
-
-              if [ -n "$APP_DIR" ]; then
-                PROJECT_DIR=$(dirname "$APP_DIR")
-                cp -a "$PROJECT_DIR"/. .
-              fi
+            if [ -z "$ZIP_FILE" ]; then
+              echo "ERROR: No ZIP project found in repository."
+              echo "Upload the V6 project ZIP to the repository root."
+              exit 1
             fi
+
+            echo "Extracting: $ZIP_FILE"
+            mkdir -p extracted
+            unzip -o "$ZIP_FILE" -d extracted
+
+            APP_DIR=$(find extracted -type d -name app \
+              -not -path '*/.git/*' | head -n 1)
+
+            if [ -z "$APP_DIR" ]; then
+              echo "ERROR: ZIP does not contain an app directory."
+              find extracted -maxdepth 4 -type f | head -n 100
+              exit 1
+            fi
+
+            PROJECT_DIR=$(dirname "$APP_DIR")
+            cp -a "$PROJECT_DIR"/. .
           fi
 
           if [ ! -d app ]; then
-            echo "ERROR: app directory is missing"
-            find . -maxdepth 3 -type d | head -n 80
+            echo "ERROR: app directory is still missing."
             exit 1
           fi
 
-          echo "Android project found"
+          echo "Project files are ready."
+          ls -la app
+          
 
       - name: Build APK
         shell: bash
